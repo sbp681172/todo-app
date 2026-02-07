@@ -43,18 +43,18 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // ⚠️ 重要：替換成你的 Google Sheets API 設定
+// ⚠️ 重要：替換成你的 Google Sheets API 設定
     const CONFIG = {
-      // 步驟1：從 Google Cloud Console 取得 API Key
+      // 步驟1：API Key (已取消註解)
       API_KEY: 'AIzaSyCyZxzi4UaSjQE5FKFQojJFNjShI_flPkA',
 
-      SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbygDQ2ZsqDdytqPsuJtbNuSoiN_MgJ9XZLaLdXYd8jOJAunGbN-GQQ8xahX5XR1R54iJQ/exec'
-      
-      // 步驟2：從 Google Sheets 網址取得 Spreadsheet ID
+      // 步驟2：Apps Script URL
+      SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbygDQ2ZsqDdytqPsuJtbNuSoiN_MgJ9XZLaLdXYd8jOJAunGbN-GQQ8xahX5XR1R54iJQ/exec',
+
+      // 步驟3：Spreadsheet ID (確保這行前面沒有奇怪的網址)
       SPREADSHEET_ID: '16b0AjBZnXQ58b4g2nKT-Wr-f_6zmDUBEZp0GABVrtXk',
 
-      // 工作表名稱（預設為 Sheet1）
-      
+      // 步驟4：工作表名稱 (確保與 Google Sheet 分頁名一致)
       SHEET_NAME: 'sheet1'
     };
 

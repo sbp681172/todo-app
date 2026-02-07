@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +17,7 @@
       cursor: pointer;
       border-radius: 50%;
     }
-    
+
     input[type="range"]::-moz-range-thumb {
       width: 16px;
       height: 16px;
@@ -26,6 +27,7 @@
     }
   </style>
 </head>
+
 <body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-screen">
   <div id="root"></div>
 
@@ -45,11 +47,11 @@
     const CONFIG = {
       // 步驟1：從 Google Cloud Console 取得 API Key
       API_KEY: 'AIzaSyCyZxzi4UaSjQE5FKFQojJFNjShI_flPkA',
-      
+      SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbygDQ2ZsqDdytqPsuJtbNuSoiN_MgJ9XZLaLdXYd8jOJAunGbN-GQQ8xahX5XR1R54iJQ/exec'
       // 步驟2：從 Google Sheets 網址取得 Spreadsheet ID
       // 網址格式：https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
       SPREADSHEET_ID: '16b0AjBZnXQ58b4g2nKT-Wr-f_6zmDUBEZp0GABVrtXk',
-      
+
       // 工作表名稱（預設為 Sheet1）
       SHEET_NAME: 'Sheet1'
     };
@@ -176,14 +178,14 @@
 
       // 計算完成度
       const completedCount = tasks.filter(task => task.completed).length;
-      const completionPercentage = tasks.length > 0 
-        ? Math.round((completedCount / tasks.length) * 100) 
+      const completionPercentage = tasks.length > 0
+        ? Math.round((completedCount / tasks.length) * 100)
         : 0;
 
       // 新增任務
       const addTask = () => {
         if (newTask.trim()) {
-          const updatedTasks = [...tasks, {
+          const newTaskObj = {
             id: Date.now(),
             text: newTask,
             priority: newPriority,
@@ -192,9 +194,25 @@
             endDate: newEndDate,
             progress: 0,
             progressNotes: []
-          }];
+          };
+
+          const updatedTasks = [...tasks, newTaskObj];
           setTasks(updatedTasks);
+
+          // 1. 原有的本地/ Sheets 更新邏輯
           saveToGoogleSheets(updatedTasks);
+
+          // 2. 新增：透過 Apps Script 進行真正的新增寫入
+          if (CONFIG.SCRIPT_URL) {
+            fetch(CONFIG.SCRIPT_URL, {
+              method: 'POST',
+              mode: 'no-cors', // 避免跨網域錯誤
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newTaskObj)
+            }).then(() => console.log('雲端寫入指令已送出'));
+          }
+
+          // 重設輸入框
           setNewTask('');
           setNewPriority('medium');
           setNewStartDate('');
@@ -204,7 +222,7 @@
 
       // 切換完成狀態
       const toggleTask = (id) => {
-        const updatedTasks = tasks.map(task => 
+        const updatedTasks = tasks.map(task =>
           task.id === id ? { ...task, completed: !task.completed, progress: task.completed ? task.progress : 100 } : task
         );
         setTasks(updatedTasks);
@@ -213,7 +231,7 @@
 
       // 更新進度
       const updateProgress = (id, newProgress) => {
-        const updatedTasks = tasks.map(task => 
+        const updatedTasks = tasks.map(task =>
           task.id === id ? { ...task, progress: parseInt(newProgress), completed: newProgress >= 100 } : task
         );
         setTasks(updatedTasks);
@@ -223,7 +241,7 @@
       // 新增進度紀錄
       const addProgressNote = (taskId, noteText, noteType) => {
         if (!noteText.trim()) return;
-        
+
         const updatedTasks = tasks.map(task => {
           if (task.id === taskId) {
             const newNote = {
@@ -241,7 +259,7 @@
           }
           return task;
         });
-        
+
         setTasks(updatedTasks);
         saveToGoogleSheets(updatedTasks);
         setTaskNotes(prev => ({ ...prev, [taskId]: '' }));
@@ -253,8 +271,8 @@
           if (task.id === taskId) {
             return {
               ...task,
-              progressNotes: task.progressNotes.map(note => 
-                note.id === noteId 
+              progressNotes: task.progressNotes.map(note =>
+                note.id === noteId
                   ? { ...note, solution, resolved: solution.trim() !== '' }
                   : note
               )
@@ -303,12 +321,12 @@
 
       const getDateStatus = (startDate, endDate) => {
         if (!startDate && !endDate) return null;
-        
+
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         const start = startDate ? new Date(startDate) : null;
         const end = endDate ? new Date(endDate) : null;
-        
+
         if (end && end < now) {
           return { status: 'overdue', text: '已逾期', color: 'text-red-400' };
         }
@@ -363,11 +381,10 @@
                 📋 個人工作管理
               </h1>
               <div className="text-center">
-                <span className={`text-sm px-3 py-1 rounded-full ${
-                  syncStatus.includes('成功') ? 'bg-green-600/20 text-green-400' :
-                  syncStatus.includes('失敗') ? 'bg-red-600/20 text-red-400' :
-                  'bg-blue-600/20 text-blue-400'
-                }`}>
+                <span className={`text-sm px-3 py-1 rounded-full ${syncStatus.includes('成功') ? 'bg-green-600/20 text-green-400' :
+                    syncStatus.includes('失敗') ? 'bg-red-600/20 text-red-400' :
+                      'bg-blue-600/20 text-blue-400'
+                  }`}>
                   {syncStatus}
                 </span>
               </div>
@@ -382,7 +399,7 @@
                 </span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
-                <div 
+                <div
                   className="bg-gradient-to-r from-blue-500 to-purple-500 h-full transition-all duration-500 ease-out rounded-full"
                   style={{ width: `${completionPercentage}%` }}
                 />
@@ -415,7 +432,7 @@
                     <option value="household">家務工作</option>
                   </select>
                 </div>
-                
+
                 <div className="flex gap-3 items-center">
                   <div className="flex items-center gap-2 flex-1">
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -435,7 +452,7 @@
                       className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                     />
                   </div>
-                  
+
                   <button
                     onClick={addTask}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 hover:shadow-lg hover:shadow-blue-500/50"
@@ -462,13 +479,12 @@
                   const isExpanded = expandedTasks[task.id] || false;
                   const currentNote = taskNotes[task.id] || '';
                   const currentNoteType = taskNoteTypes[task.id] || 'progress';
-                  
+
                   return (
                     <div
                       key={task.id}
-                      className={`${priorityColors[task.priority]} bg-gray-800/70 backdrop-blur-sm rounded-lg p-4 transition-all duration-200 hover:shadow-lg ${
-                        task.completed ? 'opacity-60' : ''
-                      }`}
+                      className={`${priorityColors[task.priority]} bg-gray-800/70 backdrop-blur-sm rounded-lg p-4 transition-all duration-200 hover:shadow-lg ${task.completed ? 'opacity-60' : ''
+                        }`}
                     >
                       <div className="flex items-start gap-4">
                         {/* 完成按鈕 */}
@@ -493,18 +509,18 @@
                             <p className={`text-white text-lg ${task.completed ? 'line-through text-gray-500' : ''}`}>
                               {task.text}
                             </p>
-                            
+
                             <div className="flex gap-2 mt-2 flex-wrap items-center">
                               <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${priorityBadgeColors[task.priority]}`}>
                                 {priorityLabels[task.priority]}優先級
                               </span>
-                              
+
                               {dateStatus && (
                                 <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-700/50 ${dateStatus.color}`}>
                                   {dateStatus.text}
                                 </span>
                               )}
-                              
+
                               {task.progressNotes && task.progressNotes.length > 0 && (
                                 <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
                                   {task.progressNotes.length} 筆紀錄
@@ -535,7 +551,7 @@
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
-                                <div 
+                                <div
                                   className="bg-gradient-to-r from-blue-500 to-purple-500 h-full transition-all duration-300"
                                   style={{ width: `${task.progress || 0}%` }}
                                 />
@@ -590,4 +606,5 @@
     ReactDOM.render(<TodoApp />, document.getElementById('root'));
   </script>
 </body>
+
 </html>

@@ -3,78 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VibePro 2.0 - 雲端任務儀表板</title>
+    <title>待辦事項小工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f8fafc; }
-        .task-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .task-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -15px rgba(0,0,0,0.08); }
-        .modal-bg { background-color: rgba(255, 255, 255, 0.8); backdrop-filter: blur(20px); }
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        body { font-family: 'Noto Sans TC', sans-serif; background: #f1f5f9; color: #1e293b; }
+        .task-card { transition: all 0.25s ease; border: 1px solid rgba(255,255,255,0.8); }
+        .task-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -10px rgba(0,0,0,0.05); }
+        .glass-modal { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); }
+        .pulse-btn { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); } 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); } }
     </style>
 </head>
-<body class="text-gray-800">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         const PRIORITY_MAP = {
-            high: { color: '#ef4444', label: '🔴 緊急', bg: 'bg-red-50', text: 'text-red-600' },
-            medium: { color: '#fbbf24', label: '🟡 普通', bg: 'bg-amber-50', text: 'text-amber-600' },
-            low: { color: '#10b981', label: '🟢 低優先', bg: 'bg-emerald-50', text: 'text-emerald-600' },
-            home: { color: '#a855f7', label: '🏠 家務', bg: 'bg-purple-50', text: 'text-purple-600' }
+            high: { label: '🔥 緊急', bg: 'bg-rose-100', text: 'text-rose-600', dot: 'bg-rose-500' },
+            medium: { label: '⚡ 普通', bg: 'bg-amber-100', text: 'text-amber-600', dot: 'bg-amber-500' },
+            low: { label: '🌱 低優先', bg: 'bg-emerald-100', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+            home: { label: '🏠 家務', bg: 'bg-indigo-100', text: 'text-indigo-600', dot: 'bg-indigo-500' }
         };
 
         function App() {
             const [tasks, setTasks] = useState([]);
             const [view, setView] = useState('active');
             const [selectedTask, setSelectedTask] = useState(null);
-            const [form, setForm] = useState({ text: '', priority: 'medium', start: '', end: '' });
+            const [form, setForm] = useState({ text: '', priority: 'medium', end: '' });
             const [showAddForm, setShowAddForm] = useState(false);
             const [tempText, setTempText] = useState('');
             const [activeInput, setActiveInput] = useState({ type: null, issueId: null });
             const [isLoaded, setIsLoaded] = useState(false);
+            
+            // 使用 Ref 來避免 useEffect 閉包問題
+            const tasksRef = useRef([]);
+            useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
             const CLOUD_URL = "https://script.google.com/macros/s/AKfycbwVZtUFKOj2Gqv2jMj43F02w88p1JK4D8hyz49YzMPbJbymhHdnZVPfbgQ6OP5_IFUR/exec";
 
-            // 載入資料
+            // 讀取
             useEffect(() => {
-                const loadData = async () => {
+                const load = async () => {
                     try {
-                        const response = await fetch(CLOUD_URL);
-                        const cloudData = await response.json();
-                        if (Array.isArray(cloudData)) {
-                            setTasks(cloudData);
+                        const res = await fetch(CLOUD_URL);
+                        const data = await res.json();
+                        if (Array.isArray(data)) {
+                            setTasks(data);
                         }
-                    } catch (e) { console.error("Load failed", e); }
+                    } catch (e) { console.error("Load Error", e); }
                     finally { setIsLoaded(true); }
                 };
-                loadData();
+                load();
             }, []);
 
-            // 同步資料
+            // 同步 (增加防抖，避免寫入過於頻繁導致 Sheet 沒存到)
             useEffect(() => {
                 if (isLoaded) {
-                    localStorage.setItem('vibe-pro-final', JSON.stringify(tasks));
-                    fetch(CLOUD_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        body: JSON.stringify({ tasks })
-                    });
+                    const timer = setTimeout(() => {
+                        fetch(CLOUD_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tasks }) });
+                        localStorage.setItem('vibe-tasks-final', JSON.stringify(tasks));
+                    }, 500); 
+                    return () => clearTimeout(timer);
                 }
             }, [tasks, isLoaded]);
 
-            const handleAdd = () => {
-                if (!form.text.trim()) return;
-                const newTask = { id: Date.now(), ...form, progress: 0, description: '', issues: [], isDone: false };
-                setTasks([newTask, ...tasks]);
-                setForm({ text: '', priority: 'medium', start: '', end: '' });
-                setShowAddForm(false);
+            // 修正刪除邏輯：手動清理 State
+            const deleteTask = (e, id) => {
+                e.stopPropagation(); // 徹底切斷冒泡
+                if (confirm("確定要刪除嗎？此動作無法復原。")) {
+                    const nextTasks = tasks.filter(t => t.id !== id);
+                    setTasks(nextTasks);
+                    setSelectedTask(null);
+                }
+            };
+
+            const toggleTask = (e, id) => {
+                e.stopPropagation();
+                setTasks(prev => prev.map(t => {
+                    if (t.id === id) {
+                        const newStatus = !t.isDone;
+                        return { ...t, isDone: newStatus, progress: newStatus ? 100 : (t.progress === 100 ? 0 : t.progress) };
+                    }
+                    return t;
+                }));
             };
 
             const updateTask = (id, field, value) => {
@@ -82,105 +99,119 @@
                 if (selectedTask?.id === id) setSelectedTask(prev => ({ ...prev, [field]: value }));
             };
 
-            const toggleDone = (id) => {
-                setTasks(prev => prev.map(t => t.id === id ? { ...t, isDone: !t.isDone, progress: !t.isDone ? 100 : t.progress } : t));
-                setSelectedTask(null);
+            // 新增問題與解答
+            const addIssue = (taskId) => {
+                if (!tempText.trim()) return;
+                updateTask(taskId, 'issues', [...(tasks.find(t=>t.id===taskId).issues || []), { id: Date.now(), q: tempText, a: '', done: false }]);
+                setTempText(''); setActiveInput({type:null, issueId:null});
             };
 
-            const performDelete = (id) => {
-                if (window.confirm("確定刪除？")) {
-                    setTasks(prev => prev.filter(t => t.id !== id));
-                    setSelectedTask(null);
-                }
+            const solveIssue = (taskId, issueId) => {
+                if (!tempText.trim()) return;
+                const newIssues = (tasks.find(t=>t.id===taskId).issues || []).map(is => is.id === issueId ? { ...is, a: tempText, done: true } : is);
+                updateTask(taskId, 'issues', newIssues);
+                setTempText(''); setActiveInput({type:null, issueId:null});
             };
 
             const filteredTasks = tasks.filter(t => view === 'active' ? !t.isDone : t.isDone);
 
             return (
-                <div className="min-h-screen flex text-gray-800">
-                    {/* Sidebar */}
-                    <aside className="w-20 md:w-64 border-r border-gray-100 bg-white p-4 md:p-8 flex flex-col sticky top-0 h-screen">
-                        <div className="flex items-center gap-3 mb-12">
-                            <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center text-white font-black text-xl">V</div>
-                            <h1 className="text-xl font-black hidden md:block italic">VIBEPRO</h1>
-                        </div>
-                        <nav className="flex-1 space-y-3">
-                            <button onClick={() => setView('active')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl font-bold transition-all ${view === 'active' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-50'}`}>
-                                📊 <span className="hidden md:block">儀表板</span>
-                            </button>
-                            <button onClick={() => setView('completed')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl font-bold transition-all ${view === 'completed' ? 'bg-emerald-500 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>
-                                ✅ <span className="hidden md:block">已完成</span>
-                            </button>
+                <div className="min-h-screen flex">
+                    <aside className="w-16 md:w-56 bg-white border-r border-slate-200 flex flex-col sticky top-0 h-screen">
+                        <div className="p-6 font-black text-indigo-600 text-center md:text-left">待辦事項</div>
+                        <nav className="flex-1 px-3 space-y-2">
+                            <button onClick={() => setView('active')} className={`w-full p-3 rounded-xl text-xs font-bold ${view === 'active' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>📊 進行中</button>
+                            <button onClick={() => setView('completed')} className={`w-full p-3 rounded-xl text-xs font-bold ${view === 'completed' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>✅ 已完成</button>
                         </nav>
-                        <button onClick={() => setShowAddForm(true)} className="bg-gray-900 text-white py-4 rounded-2xl font-black hover:bg-black transition-all">+ 新增</button>
                     </aside>
 
-                    {/* Main */}
-                    <main className="flex-1 p-6 md:p-16">
-                        <header className="mb-12">
-                            <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase">{view} TASKS</h2>
+                    <main className="flex-1 p-8 max-w-5xl">
+                        <header className="flex justify-between items-center mb-10">
+                            <h2 className="text-xl font-black">{view === 'active' ? '任務儀表板' : '成就紀錄庫'}</h2>
+                            <button onClick={() => setShowAddForm(true)} className="pulse-btn bg-indigo-600 text-white px-6 py-2 rounded-full font-bold text-xs shadow-lg">+ 新增任務</button>
                         </header>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                             {filteredTasks.map(task => (
-                                <div key={task.id} onClick={() => setSelectedTask(task)} className="task-card bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm cursor-pointer relative overflow-hidden group">
-                                    <div className="flex justify-between items-start mb-8">
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${PRIORITY_MAP[task.priority]?.bg} ${PRIORITY_MAP[task.priority]?.text}`}>
-                                            {task.priority}
-                                        </span>
+                                <div key={task.id} onClick={() => setSelectedTask(task)} className="task-card bg-white p-5 rounded-3xl cursor-pointer relative">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className={`px-2 py-0.5 rounded text-[9px] font-black ${PRIORITY_MAP[task.priority]?.bg} ${PRIORITY_MAP[task.priority]?.text}`}>{PRIORITY_MAP[task.priority]?.label}</div>
+                                        <div onClick={(e) => toggleTask(e, task.id)} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${task.isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200'}`}>
+                                            {task.isDone && '✓'}
+                                        </div>
                                     </div>
-                                    <h3 className={`text-2xl font-black mb-6 leading-tight ${task.isDone ? 'text-gray-200 line-through' : 'text-gray-800'}`}>
-                                        {task.text}
-                                    </h3>
-                                    <div className="w-full bg-gray-50 h-2 rounded-full overflow-hidden mb-4">
-                                        <div className="h-full bg-black transition-all duration-1000" style={{ width: `${task.progress}%` }}></div>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[10px] font-black text-gray-400">
-                                        <span>PROGRESS {task.progress}%</span>
-                                        <span>📅 {task.end || 'N/A'}</span>
+                                    <h3 className={`font-bold text-sm mb-4 ${task.isDone ? 'text-slate-300 line-through' : 'text-slate-700'}`}>{task.text}</h3>
+                                    <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${task.progress}%` }}></div>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     </main>
 
-                    {/* Modal (以最簡化的結構確保不跳錯) */}
+                    {/* 詳細資料 Modal */}
                     {selectedTask && (
-                        <div className="fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4" onClick={() => setSelectedTask(null)}>
-                            <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
-                                <h2 className="text-3xl font-black mb-6">{selectedTask.text}</h2>
+                        <div className="fixed inset-0 z-50 glass-modal flex items-center justify-center p-4" onClick={() => setSelectedTask(null)}>
+                            <div className="bg-white w-full max-w-xl rounded-[2rem] shadow-2xl p-8 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between mb-6">
+                                    <h2 className="font-black text-slate-800">任務詳情</h2>
+                                    <button onClick={() => setSelectedTask(null)} className="text-slate-300 text-2xl">&times;</button>
+                                </div>
                                 <div className="space-y-6">
-                                    <div>
-                                        <label className="text-xs font-black text-gray-400 uppercase">Progress: {selectedTask.progress}%</label>
-                                        <input type="range" className="w-full accent-black mt-2" value={selectedTask.progress} onChange={e => updateTask(selectedTask.id, 'progress', e.target.value)} />
+                                    <h3 className="text-lg font-bold text-indigo-600 border-l-4 border-indigo-600 pl-3">{selectedTask.text}</h3>
+                                    <div className="bg-slate-50 p-5 rounded-2xl">
+                                        <div className="flex justify-between mb-2 text-[10px] font-black text-slate-400 uppercase"><span>完成度</span><span>{selectedTask.progress}%</span></div>
+                                        <input type="range" className="w-full h-1.5 accent-indigo-600" value={selectedTask.progress} onChange={e => updateTask(selectedTask.id, 'progress', e.target.value)} />
                                     </div>
-                                    <textarea className="w-full bg-gray-50 p-6 rounded-2xl h-32 outline-none font-medium" value={selectedTask.description} onChange={e => updateTask(selectedTask.id, 'description', e.target.value)} placeholder="任務描述..." />
-                                    <div className="flex gap-4">
-                                        <button onClick={() => toggleDone(selectedTask.id)} className="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-black tracking-widest uppercase">Finish</button>
-                                        <button onClick={() => performDelete(selectedTask.id)} className="px-6 bg-red-50 text-red-500 rounded-2xl font-black uppercase text-xs tracking-widest">Delete</button>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase">詳細描述</label>
+                                        <textarea className="w-full bg-slate-50 p-4 rounded-xl h-24 text-sm font-medium outline-none" value={selectedTask.description || ''} onChange={e => updateTask(selectedTask.id, 'description', e.target.value)} placeholder="任務說明..." />
+                                    </div>
+
+                                    {/* 問題區塊 */}
+                                    <div className="pt-4 border-t border-slate-100">
+                                        <div className="flex justify-between items-center mb-4"><span className="text-[10px] font-black text-slate-800">問題紀錄</span><button onClick={() => setActiveInput({type:'issue'})} className="text-[9px] bg-slate-100 px-2 py-1 rounded-lg">+ 新增問題</button></div>
+                                        <div className="space-y-3">
+                                            {activeInput.type === 'issue' && (
+                                                <div className="flex gap-2"><input autoFocus className="flex-1 bg-slate-50 p-2 rounded text-xs outline-none font-bold" value={tempText} onChange={e=>setTempText(e.target.value)} onKeyDown={e=>e.key==='Enter' && addIssue(selectedTask.id)} /><button onClick={()=>addIssue(selectedTask.id)} className="bg-indigo-600 text-white px-3 rounded text-[10px]">送出</button></div>
+                                            )}
+                                            {(selectedTask.issues || []).map(is => (
+                                                <div key={is.id} className={`p-4 rounded-xl border ${is.done ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                                                    <div className="flex justify-between items-start gap-4"><span className={`text-[11px] font-bold ${is.done ? 'text-slate-400 line-through' : 'text-rose-700'}`}>Q: {is.q}</span>{!is.done && <button onClick={()=>setActiveInput({type:'solution', issueId:is.id})} className="text-[9px] bg-blue-500 text-white px-2 py-0.5 rounded">解決</button>}</div>
+                                                    {is.done && <p className="mt-2 text-[10px] text-emerald-700 font-bold bg-white/50 p-2 rounded italic">Ans: {is.a}</p>}
+                                                    {activeInput.type === 'solution' && activeInput.issueId === is.id && (
+                                                        <div className="mt-2 flex gap-2"><input autoFocus className="flex-1 border p-2 rounded text-xs outline-none" value={tempText} onChange={e=>setTempText(e.target.value)} onKeyDown={e=>e.key==='Enter' && solveIssue(selectedTask.id, is.id)} /><button onClick={()=>solveIssue(selectedTask.id, is.id)} className="bg-blue-600 text-white px-3 rounded text-[10px]">儲存</button></div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4 pt-6">
+                                        <button onClick={(e) => { toggleTask(e, selectedTask.id); setSelectedTask(null); }} className={`flex-1 py-3 rounded-xl font-black text-xs shadow-md ${selectedTask.isDone ? 'bg-slate-100 text-slate-500' : 'bg-emerald-500 text-white'}`}>
+                                            {selectedTask.isDone ? '還原為進行中' : '標記為已完成'}
+                                        </button>
+                                        <button onClick={(e) => deleteTask(e, selectedTask.id)} className="px-5 bg-rose-50 text-rose-500 rounded-xl font-bold text-[10px] hover:bg-rose-500 hover:text-white transition-all">刪除任務</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Add Form */}
+                    {/* 新增任務彈窗 */}
                     {showAddForm && (
-                        <div className="fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
-                                <h2 className="text-2xl font-black mb-6 text-center italic">NEW PROJECT</h2>
-                                <div className="space-y-6">
-                                    <input className="w-full bg-gray-50 p-6 rounded-2xl outline-none font-black text-lg" placeholder="Title..." value={form.text} onChange={e => setForm({...form, text: e.target.value})} />
-                                    <select className="w-full bg-gray-50 p-5 rounded-2xl font-black" value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}>
-                                        <option value="high">🔴 High</option>
-                                        <option value="medium">🟡 Medium</option>
-                                        <option value="low">🟢 Low</option>
-                                        <option value="home">🏠 Home</option>
-                                    </select>
-                                    <input type="date" className="w-full bg-gray-50 p-5 rounded-2xl font-black text-sm" value={form.end} onChange={e => setForm({...form, end: e.target.value})} />
-                                    <div className="flex gap-4">
-                                        <button onClick={handleAdd} className="flex-1 bg-black text-white py-5 rounded-2xl font-black tracking-widest uppercase shadow-xl">Deploy</button>
-                                        <button onClick={() => setShowAddForm(false)} className="px-6 text-gray-400 font-black text-xs tracking-widest uppercase">Cancel</button>
+                        <div className="fixed inset-0 z-50 glass-modal flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl">
+                                <h2 className="text-base font-black mb-6 text-center text-slate-800">建立新任務</h2>
+                                <div className="space-y-4">
+                                    <input autoFocus className="w-full bg-slate-50 p-4 rounded-xl outline-none font-bold text-sm" placeholder="任務名稱..." value={form.text} onChange={e => setForm({...form, text: e.target.value})} />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <select className="bg-slate-50 p-3 rounded-xl font-bold text-xs" value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}><option value="high">🔴 緊急</option><option value="medium">🟡 普通</option><option value="low">🟢 低優先</option><option value="home">🏠 家務</option></select>
+                                        <input type="date" className="bg-slate-50 p-3 rounded-xl font-bold text-[10px]" value={form.end} onChange={e => setForm({...form, end: e.target.value})} />
+                                    </div>
+                                    <div className="flex gap-3 pt-4">
+                                        <button onClick={() => { if(!form.text.trim()) return; setTasks([{id:Date.now(), ...form, progress:0, issues:[], isDone:false}, ...tasks]); setShowAddForm(false); setForm({text:'', priority:'medium', end:''}); }} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-black text-xs shadow-xl">部署任務</button>
+                                        <button onClick={() => setShowAddForm(false)} className="px-4 text-slate-400 font-bold text-[10px]">取消</button>
                                     </div>
                                 </div>
                             </div>

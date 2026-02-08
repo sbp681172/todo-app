@@ -14,7 +14,6 @@
         .task-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .task-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -15px rgba(0,0,0,0.08); }
         .modal-bg { background-color: rgba(255, 255, 255, 0.8); backdrop-filter: blur(20px); }
-        /* 隱藏捲軸但保留功能 */
         ::-webkit-scrollbar { width: 0px; background: transparent; }
     </style>
 </head>
@@ -32,12 +31,8 @@
         };
 
         function App() {
-            // --- 狀態定義 ---
-            const [tasks, setTasks] = useState(() => {
-                const saved = localStorage.getItem('vibe-pro-final');
-                return saved ? JSON.parse(saved) : [];
-            });
-            const [view, setView] = useState('active'); // 'active' 或 'completed'
+            const [tasks, setTasks] = useState([]);
+            const [view, setView] = useState('active');
             const [selectedTask, setSelectedTask] = useState(null);
             const [form, setForm] = useState({ text: '', priority: 'medium', start: '', end: '' });
             const [showAddForm, setShowAddForm] = useState(false);
@@ -47,43 +42,33 @@
 
             const CLOUD_URL = "https://script.google.com/macros/s/AKfycbwVZtUFKOj2Gqv2jMj43F02w88p1JK4D8hyz49YzMPbJbymhHdnZVPfbgQ6OP5_IFUR/exec";
 
-            // --- 雲端連動邏輯 ---
+            // 載入資料
             useEffect(() => {
-                const loadFromCloud = async () => {
+                const loadData = async () => {
                     try {
                         const response = await fetch(CLOUD_URL);
                         const cloudData = await response.json();
-                        if (Array.isArray(cloudData) && cloudData.length > 0) {
+                        if (Array.isArray(cloudData)) {
                             setTasks(cloudData);
                         }
-                    } catch (error) {
-                        console.error("讀取失敗:", error);
-                    } finally {
-                        setIsLoaded(true);
-                    }
+                    } catch (e) { console.error("Load failed", e); }
+                    finally { setIsLoaded(true); }
                 };
-                loadFromCloud();
+                loadData();
             }, []);
 
-            const syncToCloud = async (currentTasks) => {
-                try {
-                    await fetch(CLOUD_URL, {
+            // 同步資料
+            useEffect(() => {
+                if (isLoaded) {
+                    localStorage.setItem('vibe-pro-final', JSON.stringify(tasks));
+                    fetch(CLOUD_URL, {
                         method: 'POST',
                         mode: 'no-cors',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ tasks: currentTasks })
+                        body: JSON.stringify({ tasks })
                     });
-                } catch (error) { console.error("備份失敗:", error); }
-            };
-
-            useEffect(() => {
-                if (isLoaded && tasks.length >= 0) {
-                    localStorage.setItem('vibe-pro-final', JSON.stringify(tasks));
-                    syncToCloud(tasks);
                 }
             }, [tasks, isLoaded]);
 
-            // --- 功能函數 ---
             const handleAdd = () => {
                 if (!form.text.trim()) return;
                 const newTask = { id: Date.now(), ...form, progress: 0, description: '', issues: [], isDone: false };
@@ -92,51 +77,121 @@
                 setShowAddForm(false);
             };
 
+            const updateTask = (id, field, value) => {
+                setTasks(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+                if (selectedTask?.id === id) setSelectedTask(prev => ({ ...prev, [field]: value }));
+            };
+
+            const toggleDone = (id) => {
+                setTasks(prev => prev.map(t => t.id === id ? { ...t, isDone: !t.isDone, progress: !t.isDone ? 100 : t.progress } : t));
+                setSelectedTask(null);
+            };
+
             const performDelete = (id) => {
-                if (window.confirm("⚠️ 確定要刪除嗎？此動作無法復原。")) {
+                if (window.confirm("確定刪除？")) {
                     setTasks(prev => prev.filter(t => t.id !== id));
                     setSelectedTask(null);
                 }
             };
 
-            const updateTask = (id, field, value) => {
-                setTasks(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
-                if (selectedTask?.id === id) {
-                    setSelectedTask(prev => ({ ...prev, [field]: value }));
-                }
-            };
-
-            const toggleTaskDone = (id) => {
-                setTasks(prev => prev.map(t => t.id === id ? { ...t, isDone: !t.isDone, progress: !t.isDone ? 100 : t.progress } : t));
-                setSelectedTask(null);
-            };
-
-            const submitIssue = (taskId) => {
-                if (!tempText.trim()) return;
-                const task = tasks.find(t => t.id === taskId);
-                updateTask(taskId, 'issues', [...(task.issues || []), { id: Date.now(), q: tempText, a: '', done: false }]);
-                setTempText('');
-                setActiveInput({ type: null, issueId: null });
-            };
-
-            const submitSolution = (taskId, issueId) => {
-                if (!tempText.trim()) return;
-                const task = tasks.find(t => t.id === taskId);
-                const newIssues = task.issues.map(is => is.id === issueId ? { ...is, a: tempText, done: true } : is);
-                updateTask(taskId, 'issues', newIssues);
-                setTempText('');
-                setActiveInput({ type: null, issueId: null });
-            };
-
             const filteredTasks = tasks.filter(t => view === 'active' ? !t.isDone : t.isDone);
 
             return (
-                <div className="min-h-screen flex">
-                    {/* 左側導覽列 */}
+                <div className="min-h-screen flex text-gray-800">
+                    {/* Sidebar */}
                     <aside className="w-20 md:w-64 border-r border-gray-100 bg-white p-4 md:p-8 flex flex-col sticky top-0 h-screen">
                         <div className="flex items-center gap-3 mb-12">
-                            <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-2xl rotate-3">V</div>
-                            <h1 className="text-xl font-black tracking-tighter hidden md:block italic">VIBEPRO 2.0</h1>
+                            <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center text-white font-black text-xl">V</div>
+                            <h1 className="text-xl font-black hidden md:block italic">VIBEPRO</h1>
                         </div>
                         <nav className="flex-1 space-y-3">
-                            <button onClick={() => setView('active')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-[1.5rem] font-bold transition-all ${view === 'active' ? 'bg-black text-white shadow-xl scale-10
+                            <button onClick={() => setView('active')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl font-bold transition-all ${view === 'active' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-50'}`}>
+                                📊 <span className="hidden md:block">儀表板</span>
+                            </button>
+                            <button onClick={() => setView('completed')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl font-bold transition-all ${view === 'completed' ? 'bg-emerald-500 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>
+                                ✅ <span className="hidden md:block">已完成</span>
+                            </button>
+                        </nav>
+                        <button onClick={() => setShowAddForm(true)} className="bg-gray-900 text-white py-4 rounded-2xl font-black hover:bg-black transition-all">+ 新增</button>
+                    </aside>
+
+                    {/* Main */}
+                    <main className="flex-1 p-6 md:p-16">
+                        <header className="mb-12">
+                            <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase">{view} TASKS</h2>
+                        </header>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+                            {filteredTasks.map(task => (
+                                <div key={task.id} onClick={() => setSelectedTask(task)} className="task-card bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm cursor-pointer relative overflow-hidden group">
+                                    <div className="flex justify-between items-start mb-8">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${PRIORITY_MAP[task.priority]?.bg} ${PRIORITY_MAP[task.priority]?.text}`}>
+                                            {task.priority}
+                                        </span>
+                                    </div>
+                                    <h3 className={`text-2xl font-black mb-6 leading-tight ${task.isDone ? 'text-gray-200 line-through' : 'text-gray-800'}`}>
+                                        {task.text}
+                                    </h3>
+                                    <div className="w-full bg-gray-50 h-2 rounded-full overflow-hidden mb-4">
+                                        <div className="h-full bg-black transition-all duration-1000" style={{ width: `${task.progress}%` }}></div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px] font-black text-gray-400">
+                                        <span>PROGRESS {task.progress}%</span>
+                                        <span>📅 {task.end || 'N/A'}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </main>
+
+                    {/* Modal (以最簡化的結構確保不跳錯) */}
+                    {selectedTask && (
+                        <div className="fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4" onClick={() => setSelectedTask(null)}>
+                            <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
+                                <h2 className="text-3xl font-black mb-6">{selectedTask.text}</h2>
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className="text-xs font-black text-gray-400 uppercase">Progress: {selectedTask.progress}%</label>
+                                        <input type="range" className="w-full accent-black mt-2" value={selectedTask.progress} onChange={e => updateTask(selectedTask.id, 'progress', e.target.value)} />
+                                    </div>
+                                    <textarea className="w-full bg-gray-50 p-6 rounded-2xl h-32 outline-none font-medium" value={selectedTask.description} onChange={e => updateTask(selectedTask.id, 'description', e.target.value)} placeholder="任務描述..." />
+                                    <div className="flex gap-4">
+                                        <button onClick={() => toggleDone(selectedTask.id)} className="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-black tracking-widest uppercase">Finish</button>
+                                        <button onClick={() => performDelete(selectedTask.id)} className="px-6 bg-red-50 text-red-500 rounded-2xl font-black uppercase text-xs tracking-widest">Delete</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Add Form */}
+                    {showAddForm && (
+                        <div className="fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
+                                <h2 className="text-2xl font-black mb-6 text-center italic">NEW PROJECT</h2>
+                                <div className="space-y-6">
+                                    <input className="w-full bg-gray-50 p-6 rounded-2xl outline-none font-black text-lg" placeholder="Title..." value={form.text} onChange={e => setForm({...form, text: e.target.value})} />
+                                    <select className="w-full bg-gray-50 p-5 rounded-2xl font-black" value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}>
+                                        <option value="high">🔴 High</option>
+                                        <option value="medium">🟡 Medium</option>
+                                        <option value="low">🟢 Low</option>
+                                        <option value="home">🏠 Home</option>
+                                    </select>
+                                    <input type="date" className="w-full bg-gray-50 p-5 rounded-2xl font-black text-sm" value={form.end} onChange={e => setForm({...form, end: e.target.value})} />
+                                    <div className="flex gap-4">
+                                        <button onClick={handleAdd} className="flex-1 bg-black text-white py-5 rounded-2xl font-black tracking-widest uppercase shadow-xl">Deploy</button>
+                                        <button onClick={() => setShowAddForm(false)} className="px-6 text-gray-400 font-black text-xs tracking-widest uppercase">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

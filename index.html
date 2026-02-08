@@ -90,14 +90,15 @@
                         const response = await fetch(CLOUD_URL);
                         const cloudData = await response.json();
                         // 只有當雲端真的有資料時才覆蓋，避免把本地資料沖掉
-                        if (cloudData && cloudData.length > 0) {
-                            setTasks(cloudData); // 把雲端資料放進畫面
-                            console.log("✅ 已同步雲端最新資料");
-                        }
+                        // 關鍵改動：確保 cloudData 存在且真的是一個陣列 Array.isArray
+                        if (Array.isArray(cloudData) && cloudData.length > 0) {
+                            setTasks(cloudData); 
+                            console.log("✅ 成功從雲端載入陣列資料");
+                          }
                     } catch (error) {
-                        console.error("❌ 讀取雲端失敗:", error);
+                        console.error("❌ 讀取失敗:", error);
                     }
-                 };
+                };
                 loadFromCloud();
             }, []); // 注意最後的 []，這代表「網頁剛打開時只執行這一次」
 
@@ -301,6 +302,7 @@
 </body>
 
 </html>
+
 
 
 

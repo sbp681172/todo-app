@@ -187,7 +187,7 @@
                     </header>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-                        {filteredTasks.map(task => (
+                        {filteredTasks?.map(task => (
                             <div key={task.id} onClick={() => setSelectedTask(task)} className="bg-white p-8 rounded-[3.5rem] shadow-sm border border-gray-50 hover:shadow-2xl hover:-translate-y-2 transition-all cursor-pointer relative overflow-hidden group">
                                 <div className="corner-tag" style={{ backgroundColor: PRIORITY_MAP[task.priority]?.color }}></div>
                                 <div className="flex items-center gap-6 mb-6">
@@ -238,7 +238,7 @@
 
                                         <div className="pt-8 border-t border-gray-50">
                                             <div className="flex justify-between items-center mb-6">
-                                                <h4 className="text-xs font-black text-gray-400 tracking-widest uppercase">問題紀錄 ({selectedTask.issues?.length || 0})</h4>
+                                                <h4 className="text-xs font-black text-gray-400 tracking-widest uppercase">問題紀錄 ({selectedTask?.issues?.length || 0})</h4>
                                                 <button onClick={() => setActiveInput({type: 'issue'})} className="text-xs font-black text-blue-600 bg-blue-50 px-5 py-2 rounded-full">+ 新增</button>
                                             </div>
                                             <div className="space-y-4">
@@ -302,6 +302,7 @@
 </body>
 
 </html>
+
 
 
 

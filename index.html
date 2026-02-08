@@ -83,11 +83,32 @@
             };
 
             // 4. 自動觸發器 (useEffect)
+            // 1. 【新增的】進網頁時，從雲端抓資料回來
+            React.useEffect(() => {
+                const loadFromCloud = async () => {
+                    try {
+                        const response = await fetch(CLOUD_URL);
+                        const cloudData = await response.json();
+                        // 只有當雲端真的有資料時才覆蓋，避免把本地資料沖掉
+                        if (cloudData && cloudData.length > 0) {
+                            setTasks(cloudData); // 把雲端資料放進畫面
+                            console.log("✅ 已同步雲端最新資料");
+                        }
+                    } catch (error) {
+                        console.error("❌ 讀取雲端失敗:", error);
+                    }
+                 };
+                loadFromCloud();
+            }, []); // 注意最後的 []，這代表「網頁剛打開時只執行這一次」
+
+            // 2. 【原本的】當 tasks 變動時，自動存到本地和雲端
             useEffect(() => {
-                // 先存本機電腦
-                localStorage.setItem('vibe-pro-final', JSON.stringify(tasks));
-                // 再存雲端 Google Sheets
-                syncToCloud(tasks);
+                // 只有當 tasks 裡面真的有東西時，才去寫入雲端
+                // 這樣可以防止網頁剛載入、雲端資料還沒抓回來前，就把空資料洗上去
+                if (tasks && tasks.length > 0) {
+                    localStorage.setItem('vibe-pro-final', JSON.stringify(tasks));
+                    syncToCloud(tasks);
+                }
             }, [tasks]);
 
             // ... 剩下的 handleAdd, performDelete 等函數 ...
@@ -280,4 +301,5 @@
 </body>
 
 </html>
+
 

@@ -52,11 +52,11 @@
         };
 
         function App() {
+            // 1. 記憶區 (useState)
             const [tasks, setTasks] = useState(() => {
                 const saved = localStorage.getItem('vibe-pro-final');
                 return saved ? JSON.parse(saved) : [];
             });
-
             const [view, setView] = useState('active');
             const [selectedTask, setSelectedTask] = useState(null);
             const [form, setForm] = useState({ text: '', priority: 'medium', start: '', end: '' });
@@ -64,9 +64,38 @@
             const [tempText, setTempText] = useState('');
             const [activeInput, setActiveInput] = useState({ type: null, issueId: null });
 
+            // 2. 你的雲端位址 (換成你剛剛複製的那串)
+            const CLOUD_URL = "https://script.google.com/macros/s/AKfycbwVZtUFKOj2Gqv2jMj43F02w88p1JK4D8hyz49YzMPbJbymhHdnZVPfbgQ6OP5_IFUR/exec";
+        
+            // 3. 定義同步功能 (放在 useEffect 上方比較整齊)
+            const syncToCloud = async (currentTasks) => {
+                try {
+                    await fetch(CLOUD_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tasks: currentTasks })
+                    });
+                    console.log("✅ 雲端同步中...");
+                } catch (error) {
+                    console.error("❌ 備份失敗:", error);
+                }
+            };
+
+            // 4. 自動觸發器 (useEffect)
             useEffect(() => {
+                // 先存本機電腦
                 localStorage.setItem('vibe-pro-final', JSON.stringify(tasks));
+                // 再存雲端 Google Sheets
+                syncToCloud(tasks);
             }, [tasks]);
+
+            // ... 剩下的 handleAdd, performDelete 等函數 ...
+
+            return (
+                // ... 畫面 JSX ...
+            );
+    }
 
             const getProgressColor = (p) => {
                 if (p == 100) return '#10b981';
@@ -254,4 +283,5 @@
         root.render(<App />);
     </script>
 </body>
+
 </html>
